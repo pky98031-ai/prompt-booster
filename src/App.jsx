@@ -1,308 +1,165 @@
-﻿import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef } from "react";
 
-const SYSTEM_PROMPT = `You are a prompt engineering expert. The user provides a rough idea, often spoken casually in Korean.
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent`;
 
-Transform it into a clear, detailed, effective prompt for AI assistants.
-
-Rules:
-- Preserve the user's original intent
-- Keep the output in Korean unless the input clearly asks for English
-- Add helpful structure: role, context, task, constraints, and output format when useful
-- Remove ambiguity and add reasonable assumptions without changing the core goal
-- Output ONLY the enhanced prompt text ??no explanations or meta-commentary`;
-
-const GEMINI_MODEL = 'gemini-2.0-flash';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent`;
-
-async function boostPromptWithGemini(apiKey, userText) {
+async function boostPrompt(apiKey, userText) {
   const response = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: SYSTEM_PROMPT }],
-      },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: userText }],
-        },
-      ],
-      generationConfig: {
-        maxOutputTokens: 2048,
-      },
-    }),
+      contents: [{
+        parts: [{
+          text: `당신은 AI 프롬프트 전문가입니다. 사용자의 짧은 입력을 받아 더 효과적인 프롬프트로 변환해주세요.
+
+사용자 입력: "${userText}"
+
+위 입력을 바탕으로 더 구체적이고 효과적인 프롬프트를 한국어로 작성해주세요. 프롬프트만 출력하고 다른 설명은 하지 마세요.`
+        }]
+      }]
+    })
   });
-
   const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || `API ?�류 (${response.status})`);
-  }
-
-  const result = data.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text)
-    .join('\n')
-    .trim();
-
-  if (!result) {
-    throw new Error('?�답??받�? 못했?�니??');
-  }
-
-  return result;
-}
-
-function getSpeechRecognition() {
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-  return SpeechRecognition ? new SpeechRecognition() : null;
+  if (data.error) throw new Error(data.error.message);
+  return data.candidates[0].content.parts[0].text;
 }
 
 export default function App() {
-  const [transcript, setTranscript] = useState('');
-  const [boosted, setBoosted] = useState('');
+  const [transcript, setTranscript] = useState("");
+  const [boosted, setBoosted] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isBoosting, setIsBoosting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(true);
-
   const recognitionRef = useRef(null);
-  const speechBaseRef = useRef('');
-  const sessionTranscriptRef = useRef('');
+
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  useEffect(() => {
-    const recognition = getSpeechRecognition();
-    if (!recognition) {
-      setSpeechSupported(false);
+  const startListening = () => {
+    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      setError("이 브라우저는 음성 인식을 지원하지 않습니다. Chrome을 사용해주세요.");
       return;
     }
-
-    recognition.lang = 'ko-KR';
-    recognition.continuous = true;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = "ko-KR";
     recognition.interimResults = false;
-
-    recognition.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          sessionTranscriptRef.current += result[0].transcript;
-        }
-      }
-
-      setTranscript(
-        (speechBaseRef.current + sessionTranscriptRef.current).trim(),
-      );
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      setTranscript(e.results[0][0].transcript);
     };
-
-    recognition.onerror = (event) => {
-      setIsListening(false);
-      if (event.error === 'not-allowed') {
-        setError('마이??권한???�요?�니?? 브라?��? ?�정?�서 ?�용??주세??');
-      } else if (event.error !== 'aborted') {
-        setError(`?�성 ?�식 ?�류: ${event.error}`);
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
+    recognition.onerror = () => setError("음성 인식 오류가 발생했습니다.");
+    recognition.onend = () => setIsListening(false);
     recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+    setError("");
+  };
 
-    return () => {
-      recognition.abort();
-    };
-  }, []);
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  };
 
-  const toggleListening = useCallback(() => {
-    setError('');
-
-    if (!recognitionRef.current) {
-      setError('??브라?��???Web Speech API�?지?�하지 ?�습?�다. Chrome???�용??주세??');
+  const handleBoost = async () => {
+    if (!transcript.trim()) return;
+    if (!apiKey || apiKey === "your_gemini_api_key_here") {
+      setError(".env 파일에 VITE_GEMINI_API_KEY를 설정해주세요.");
       return;
     }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      speechBaseRef.current = transcript;
-      sessionTranscriptRef.current = '';
-      recognitionRef.current.start();
-      setIsListening(true);
-    } catch {
-      setError('?�성 ?�식???�작?????�습?�다. ?�시 ???�시 ?�도??주세??');
-    }
-  }, [isListening, transcript]);
-
-  const boostPrompt = useCallback(async () => {
-    const text = transcript.trim();
-    if (!text) {
-      setError('먼�? ?�성?�로 말하거나 ?�스?��? ?�력??주세??');
-      return;
-    }
-
-    if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-      setError('.env ?�일??VITE_GEMINI_API_KEY�??�정??주세??');
-      return;
-    }
-
-    setError('');
     setIsBoosting(true);
-    setBoosted('');
-
+    setError("");
+    setBoosted("");
     try {
-      const result = await boostPromptWithGemini(apiKey, text);
+      const result = await boostPrompt(apiKey, transcript);
       setBoosted(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '?�롬?�트 ?�상???�패?�습?�다.');
+    } catch (e) {
+      setError("오류: " + e.message);
     } finally {
       setIsBoosting(false);
     }
-  }, [transcript, apiKey]);
+  };
 
-  const copyResult = useCallback(async () => {
+  const copyResult = async () => {
     if (!boosted) return;
-
     try {
       await navigator.clipboard.writeText(boosted);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError('?�립보드 복사???�패?�습?�다.');
+      setError("복사에 실패했습니다.");
     }
-  }, [boosted]);
+  };
 
   return (
     <div className="app">
       <header className="header">
         <h1>Prompt Booster</h1>
-        <p>?�국?�로 말하�?AI ?�롬?�트�??�동?�로 ?�듬???�립?�다</p>
+        <p>한국어로 말하면 AI 프롬프트를 자동으로 다듬어 드립니다</p>
       </header>
 
       {error && <div className="error-banner">{error}</div>}
 
       <section className="card">
-        <label className="card-label" htmlFor="transcript">
-          ?�력
-        </label>
+        <label className="card-label" htmlFor="transcript">입력</label>
         <textarea
           id="transcript"
           className="input-area"
           value={transcript}
           onChange={(e) => setTranscript(e.target.value)}
-          placeholder="마이??버튼???�러 말하거나, 직접 ?�력?�세?��?
+          placeholder="마이크 버튼을 눌러 말하거나, 직접 입력하세요..."
           rows={4}
         />
-
         <div className="mic-row">
           <button
             type="button"
-            className={`mic-button${isListening ? ' listening' : ''}`}
-            onClick={toggleListening}
-            disabled={!speechSupported}
-            aria-label={isListening ? '?�성 ?�식 중�?' : '?�성 ?�력 ?�작'}
-            aria-pressed={isListening}
+            className={`mic-btn${isListening ? " listening" : ""}`}
+            onClick={isListening ? stopListening : startListening}
+            aria-label={isListening ? "음성 인식 중지" : "음성 인식 시작"}
           >
-            <svg
-              className="mic-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" x2="12" y1="19" y2="22" />
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 13.93V19h-2v2h6v-2h-2v-2.07A7.001 7.001 0 0 0 19 11h-2a5 5 0 0 1-10 0H5a7.001 7.001 0 0 0 6 6.93z"/>
             </svg>
           </button>
-          <p className="mic-hint">
-            {isListening
-              ? '?�는 중�??�시 ?�르�?중�?'
-              : speechSupported
-                ? '??��???�국?�로 말하�?
-                : '?�성 ?�력 미�??????�스?�로 ?�력?�세??}
-          </p>
+          <span className="mic-label">{isListening ? "듣는 중... (탭하여 중지)" : "탭하여 한국어로 말하기"}</span>
         </div>
-
-        <div className="actions">
+        <div className="btn-row">
           <button
             type="button"
-            className="btn btn-primary"
-            onClick={boostPrompt}
+            className="boost-btn"
+            onClick={handleBoost}
             disabled={isBoosting || !transcript.trim()}
           >
-            {isBoosting && <span className="spinner" aria-hidden="true" />}
-            {isBoosting ? '?�상 중�? : '?�롬?�트 ?�상'}
+            {isBoosting ? "향상 중..." : "프롬프트 향상"}
           </button>
           <button
             type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setTranscript('');
-              setBoosted('');
-              setError('');
-            }}
+            className="reset-btn"
+            onClick={() => { setTranscript(""); setBoosted(""); setError(""); }}
             disabled={isBoosting}
           >
-            초기??
+            초기화
           </button>
         </div>
       </section>
 
       <section className="card">
         <div className="result-header">
-          <span className="card-label">?�상???�롬?�트</span>
+          <span className="card-label">향상된 프롬프트</span>
           <button
             type="button"
-            className={`copy-btn${copied ? ' copied' : ''}`}
+            className={`copy-btn${copied ? " copied" : ""}`}
             onClick={copyResult}
             disabled={!boosted}
-            aria-label="결과 복사"
           >
-            {copied ? (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                복사??
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                </svg>
-                복사
-              </>
-            )}
+            {copied ? "복사됨" : "복사"}
           </button>
         </div>
         <div className="result-box">
-          {boosted ? (
-            boosted
-          ) : (
-            <span className="result-placeholder">
-              ?�상???�롬?�트가 ?�기???�시?�니??
-            </span>
-          )}
+          {boosted ? boosted : <span className="result-placeholder">향상된 프롬프트가 여기에 표시됩니다</span>}
         </div>
       </section>
 
-      <p className="footer-note">
-        Web Speech API · Gemini API · Chrome 권장
-      </p>
+      <p className="footer-note">Web Speech API · Gemini API · Chrome 권장</p>
     </div>
   );
 }
-
