@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`;
 
 async function boostPrompt(apiKey, userText) {
   const response = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(apiKey)}`, {
