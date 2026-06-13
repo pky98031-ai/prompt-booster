@@ -27,6 +27,8 @@ export default function App() {
   const [speechSupported, setSpeechSupported] = useState(true);
 
   const recognitionRef = useRef(null);
+  const speechBaseRef = useRef('');
+  const sessionTranscriptRef = useRef('');
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
   useEffect(() => {
@@ -41,11 +43,22 @@ export default function App() {
     recognition.interimResults = true;
 
     recognition.onresult = (event) => {
-      let text = '';
-      for (let i = 0; i < event.results.length; i += 1) {
-        text += event.results[i][0].transcript;
+      let interim = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const text = result[0].transcript;
+
+        if (result.isFinal) {
+          sessionTranscriptRef.current += text;
+        } else {
+          interim += text;
+        }
       }
-      setTranscript(text.trim());
+
+      setTranscript(
+        (speechBaseRef.current + sessionTranscriptRef.current + interim).trim(),
+      );
     };
 
     recognition.onerror = (event) => {
@@ -83,12 +96,14 @@ export default function App() {
     }
 
     try {
+      speechBaseRef.current = transcript;
+      sessionTranscriptRef.current = '';
       recognitionRef.current.start();
       setIsListening(true);
     } catch {
       setError('음성 인식을 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
     }
-  }, [isListening]);
+  }, [isListening, transcript]);
 
   const boostPrompt = useCallback(async () => {
     const text = transcript.trim();
