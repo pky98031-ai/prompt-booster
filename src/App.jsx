@@ -40,24 +40,18 @@ export default function App() {
 
     recognition.lang = 'ko-KR';
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false;
 
     recognition.onresult = (event) => {
-      let interim = '';
-
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
-        const text = result[0].transcript;
-
         if (result.isFinal) {
-          sessionTranscriptRef.current += text;
-        } else {
-          interim += text;
+          sessionTranscriptRef.current += result[0].transcript;
         }
       }
 
       setTranscript(
-        (speechBaseRef.current + sessionTranscriptRef.current + interim).trim(),
+        (speechBaseRef.current + sessionTranscriptRef.current).trim(),
       );
     };
 
