@@ -29,7 +29,7 @@ export default function App() {
   const recognitionRef = useRef(null);
   const speechBaseRef = useRef('');
   const sessionTranscriptRef = useRef('');
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   useEffect(() => {
     const recognition = getSpeechRecognition();
@@ -106,8 +106,8 @@ export default function App() {
       return;
     }
 
-    if (!apiKey || apiKey === 'your_anthropic_api_key_here') {
-      setError('.env 파일에 VITE_ANTHROPIC_API_KEY를 설정해 주세요.');
+    if (!apiKey || apiKey === 'your_gemini_api_key_here') {
+      setError('.env 파일에 VITE_GEMINI_API_KEY를 설정해 주세요.');
       return;
     }
 
@@ -116,26 +116,29 @@ export default function App() {
     setBoosted('');
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2048,
-          system: SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: text,
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: SYSTEM_PROMPT }],
             },
-          ],
-        }),
-      });
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text }],
+              },
+            ],
+            generationConfig: {
+              maxOutputTokens: 2048,
+            },
+          }),
+        },
+      );
 
       const data = await response.json();
 
@@ -143,9 +146,8 @@ export default function App() {
         throw new Error(data.error?.message || `API 오류 (${response.status})`);
       }
 
-      const result = data.content
-        ?.filter((block) => block.type === 'text')
-        .map((block) => block.text)
+      const result = data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text)
         .join('\n')
         .trim();
 
@@ -293,7 +295,7 @@ export default function App() {
       </section>
 
       <p className="footer-note">
-        Web Speech API · Claude API · Chrome 권장
+        Web Speech API · Gemini API · Chrome 권장
       </p>
     </div>
   );
