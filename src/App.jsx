@@ -11,6 +11,49 @@ Rules:
 - Remove ambiguity and add reasonable assumptions without changing the core goal
 - Output ONLY the enhanced prompt text — no explanations or meta-commentary`;
 
+const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+async function boostPromptWithGemini(apiKey, userText) {
+  const response = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: userText }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 2048,
+      },
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || `API 오류 (${response.status})`);
+  }
+
+  const result = data.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text)
+    .join('\n')
+    .trim();
+
+  if (!result) {
+    throw new Error('응답을 받지 못했습니다.');
+  }
+
+  return result;
+}
+
 function getSpeechRecognition() {
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -116,45 +159,7 @@ export default function App() {
     setBoosted('');
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: SYSTEM_PROMPT }],
-            },
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text }],
-              },
-            ],
-            generationConfig: {
-              maxOutputTokens: 2048,
-            },
-          }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error?.message || `API 오류 (${response.status})`);
-      }
-
-      const result = data.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text)
-        .join('\n')
-        .trim();
-
-      if (!result) {
-        throw new Error('응답을 받지 못했습니다.');
-      }
-
+      const result = await boostPromptWithGemini(apiKey, text);
       setBoosted(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : '프롬프트 향상에 실패했습니다.');
