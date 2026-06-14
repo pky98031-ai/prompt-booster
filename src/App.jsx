@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const CATEGORIES = [
   { id: "auto", label: "🤖 자동", color: "#7c3aed" },
@@ -7,6 +7,21 @@ const CATEGORIES = [
   { id: "study", label: "📚 공부", color: "#059669" },
   { id: "daily", label: "☀️ 일상", color: "#d97706" },
 ];
+
+function LoadingDots({ color }) {
+  const [dot, setDot] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setDot(d => (d + 1) % 4), 400);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div style={{textAlign:"center",padding:"32px 0"}}>
+      <div style={{fontSize:"40px",marginBottom:"16px",animation:"spin 1s linear infinite",display:"inline-block"}}>⚡</div>
+      <p style={{color,fontSize:"15px",fontWeight:"600"}}>프롬프트 향상 중{".".repeat(dot)}</p>
+      <p style={{color:"#64748b",fontSize:"13px",marginTop:"4px"}}>AI가 찰떡같이 다듬고 있어요</p>
+    </div>
+  );
+}
 
 export default function App() {
   const [transcript, setTranscript] = useState("");
@@ -75,11 +90,18 @@ export default function App() {
 
   return (
     <div style={{minHeight:"100vh",background:"#0f172a",color:"#e2e8f0",fontFamily:"'Apple SD Gothic Neo',sans-serif",padding:"20px 16px 40px",boxSizing:"border-box"}}>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+      `}</style>
       <div style={{maxWidth:"560px",margin:"0 auto"}}>
-        
+
         {/* 헤더 */}
         <div style={{textAlign:"center",marginBottom:"24px",paddingTop:"12px"}}>
-          <h1 style={{fontSize:"26px",fontWeight:"bold",margin:"0 0 6px"}}>⚡ Prompt Booster</h1>
+          <h1 style={{fontSize:"26px",fontWeight:"bold",margin:"0 0 6px",background:"linear-gradient(135deg,#a78bfa,#10f5b2)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+            ⚡ 말하는 대로 AI 프롬프트 뚝딱
+          </h1>
           <p style={{color:"#64748b",fontSize:"14px",margin:0}}>대충 말해도 AI가 찰떡같이 알아들어요</p>
         </div>
 
@@ -89,7 +111,8 @@ export default function App() {
           <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
             {CATEGORIES.map(c => (
               <button key={c.id} onClick={() => setCategory(c.id)} style={{
-                padding:"8px 14px",borderRadius:"20px",border:`2px solid ${category === c.id ? c.color : "#1e293b"}`,
+                padding:"8px 14px",borderRadius:"20px",
+                border:`2px solid ${category === c.id ? c.color : "#1e293b"}`,
                 background:category === c.id ? `${c.color}22` : "#1e293b",
                 color:category === c.id ? c.color : "#64748b",
                 fontSize:"13px",fontWeight:category === c.id ? "700" : "400",
@@ -100,14 +123,18 @@ export default function App() {
         </div>
 
         {/* 에러 */}
-        {error && <div style={{background:"#450a0a",border:"1px solid #ef4444",borderRadius:"8px",padding:"12px",marginBottom:"16px",color:"#fca5a5",fontSize:"14px"}}>{error}</div>}
+        {error && (
+          <div style={{background:"#450a0a",border:"1px solid #ef4444",borderRadius:"8px",padding:"12px",marginBottom:"16px",color:"#fca5a5",fontSize:"14px"}}>
+            {error}
+          </div>
+        )}
 
         {/* 입력 카드 */}
         <div style={{background:"#1e293b",borderRadius:"16px",padding:"20px",marginBottom:"16px"}}>
           <textarea
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
-            placeholder="마이크를 누르거나 직접 입력하세요...&#10;예) 이메일 써줘, 블로그 글 필요해, 요약해줘"
+            placeholder={"마이크를 누르거나 직접 입력하세요...\n예) 이메일 써줘, 블로그 글 필요해, 요약해줘"}
             rows={4}
             style={{width:"100%",background:"#0f172a",border:"1px solid #334155",borderRadius:"10px",padding:"12px",color:"#e2e8f0",fontSize:"15px",resize:"none",boxSizing:"border-box",lineHeight:"1.6",outline:"none"}}
           />
@@ -121,7 +148,8 @@ export default function App() {
                 background:isListening ? "#ef4444" : activeColor,
                 border:"none",cursor:"pointer",color:"white",fontSize:"30px",
                 boxShadow:isListening ? "0 0 0 8px rgba(239,68,68,0.2)" : `0 0 0 8px ${activeColor}22`,
-                transition:"all 0.3s"
+                transition:"all 0.3s",
+                animation:isListening ? "pulse 1s infinite" : "none"
               }}
             >🎤</button>
             <p style={{color:"#64748b",marginTop:"10px",fontSize:"13px"}}>
@@ -137,7 +165,9 @@ export default function App() {
               style={{
                 flex:1,padding:"14px",borderRadius:"10px",
                 background:isBoosting || !transcript.trim() ? "#334155" : activeColor,
-                border:"none",color:"white",fontSize:"15px",fontWeight:"bold",cursor:"pointer",transition:"all 0.2s"
+                border:"none",color:"white",fontSize:"15px",fontWeight:"bold",
+                cursor:isBoosting || !transcript.trim() ? "not-allowed" : "pointer",
+                transition:"all 0.2s"
               }}
             >{isBoosting ? "⚡ 향상 중..." : "⚡ 프롬프트 향상"}</button>
             <button
@@ -148,7 +178,7 @@ export default function App() {
         </div>
 
         {/* 결과 카드 */}
-        <div style={{background:"#1e293b",borderRadius:"16px",padding:"20px"}}>
+        <div style={{background:"#1e293b",borderRadius:"16px",padding:"20px",minHeight:"120px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
             <span style={{color:"#94a3b8",fontSize:"13px",fontWeight:"600"}}>✨ 향상된 프롬프트</span>
             {boosted && (
@@ -158,12 +188,23 @@ export default function App() {
               >{copied ? "✓ 복사됨" : "복사"}</button>
             )}
           </div>
-          <div style={{minHeight:"80px",color:boosted?"#e2e8f0":"#475569",fontSize:"14px",lineHeight:"1.8",whiteSpace:"pre-wrap"}}>
-            {boosted || "향상된 프롬프트가 여기에 표시됩니다"}
-          </div>
+
+          {isBoosting ? (
+            <LoadingDots color={activeColor} />
+          ) : boosted ? (
+            <div style={{color:"#e2e8f0",fontSize:"14px",lineHeight:"1.8",whiteSpace:"pre-wrap",animation:"fadeIn 0.4s ease"}}>
+              {boosted}
+            </div>
+          ) : (
+            <div style={{color:"#475569",fontSize:"14px",textAlign:"center",paddingTop:"24px"}}>
+              향상된 프롬프트가 여기에 표시됩니다
+            </div>
+          )}
         </div>
 
-        <p style={{textAlign:"center",color:"#1e293b",fontSize:"12px",marginTop:"24px"}}>Web Speech API · Claude API · Chrome 권장</p>
+        <p style={{textAlign:"center",color:"#334155",fontSize:"12px",marginTop:"24px"}}>
+          Web Speech API · Claude AI · Chrome 권장
+        </p>
       </div>
     </div>
   );
