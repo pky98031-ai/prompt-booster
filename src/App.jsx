@@ -1,37 +1,5 @@
 import { useState, useRef } from "react";
 
-<<<<<<< HEAD
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`;
-
-=======
->>>>>>> e14fbcb (back to claude api)
-async function boostPrompt(apiKey, userText) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      messages: [{
-        role: "user",
-        content: `당신은 AI 프롬프트 전문가입니다. 사용자의 짧은 입력을 받아 더 효과적인 프롬프트로 변환해주세요.
-
-사용자 입력: "${userText}"
-
-위 입력을 바탕으로 더 구체적이고 효과적인 프롬프트를 한국어로 작성해주세요. 프롬프트만 출력하고 다른 설명은 하지 마세요.`
-      }]
-    })
-  });
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
-  return data.content[0].text;
-}
-
 export default function App() {
   const [transcript, setTranscript] = useState("");
   const [boosted, setBoosted] = useState("");
@@ -40,26 +8,19 @@ export default function App() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const recognitionRef = useRef(null);
-
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
   const startListening = () => {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      setError("이 브라우저는 음성 인식을 지원하지 않습니다. Chrome을 사용해주세요.");
-      return;
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.lang = "ko-KR";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = (e) => {
-      setTranscript(e.results[0][0].transcript);
-    };
-    recognition.onerror = () => setError("음성 인식 오류가 발생했습니다.");
-    recognition.onend = () => setIsListening(false);
-    recognitionRef.current = recognition;
-    recognition.start();
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setError("Chrome 브라우저를 사용해주세요."); return; }
+    const r = new SR();
+    r.lang = "ko-KR";
+    r.interimResults = false;
+    r.onresult = (e) => setTranscript(e.results[0][0].transcript);
+    r.onerror = () => setError("음성 인식 오류가 발생했습니다.");
+    r.onend = () => setIsListening(false);
+    recognitionRef.current = r;
+    r.start();
     setIsListening(true);
     setError("");
   };
@@ -70,17 +31,28 @@ export default function App() {
   };
 
   const handleBoost = async () => {
-    if (!transcript.trim()) return;
-    if (!apiKey) {
-      setError("API 키가 설정되지 않았습니다.");
-      return;
-    }
+    if (!transcript.trim() || !apiKey) return;
     setIsBoosting(true);
     setError("");
     setBoosted("");
     try {
-      const result = await boostPrompt(apiKey, transcript);
-      setBoosted(result);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: `사용자의 짧은 입력을 받아 AI에게 더 효과적인 프롬프트로 변환해주세요. 프롬프트만 출력하세요.\n\n입력: "${transcript}"` }]
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      setBoosted(data.content[0].text);
     } catch (e) {
       setError("오류: " + e.message);
     } finally {
@@ -88,87 +60,33 @@ export default function App() {
     }
   };
 
-  const copyResult = async () => {
-    if (!boosted) return;
-    try {
-      await navigator.clipboard.writeText(boosted);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError("복사에 실패했습니다.");
-    }
-  };
-
   return (
-    <div className="app">
-      <header className="header">
-        <h1>Prompt Booster</h1>
-        <p>한국어로 말하면 AI 프롬프트를 자동으로 다듬어 드립니다</p>
-      </header>
-
-      {error && <div className="error-banner">{error}</div>}
-
-      <section className="card">
-        <label className="card-label" htmlFor="transcript">입력</label>
-        <textarea
-          id="transcript"
-          className="input-area"
-          value={transcript}
-          onChange={(e) => setTranscript(e.target.value)}
-          placeholder="마이크 버튼을 눌러 말하거나, 직접 입력하세요..."
-          rows={4}
-        />
-        <div className="mic-row">
-          <button
-            type="button"
-            className={`mic-btn${isListening ? " listening" : ""}`}
-            onClick={isListening ? stopListening : startListening}
-            aria-label={isListening ? "음성 인식 중지" : "음성 인식 시작"}
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 13.93V19h-2v2h6v-2h-2v-2.07A7.001 7.001 0 0 0 19 11h-2a5 5 0 0 1-10 0H5a7.001 7.001 0 0 0 6 6.93z"/>
-            </svg>
-          </button>
-          <span className="mic-label">{isListening ? "듣는 중... (탭하여 중지)" : "탭하여 한국어로 말하기"}</span>
+    <div style={{minHeight:"100vh",background:"#0f172a",color:"#e2e8f0",fontFamily:"sans-serif",padding:"24px",maxWidth:"600px",margin:"0 auto"}}>
+      <h1 style={{textAlign:"center",fontSize:"28px",fontWeight:"bold",marginBottom:"8px"}}>Prompt Booster</h1>
+      <p style={{textAlign:"center",color:"#94a3b8",marginBottom:"32px"}}>한국어로 말하면 AI 프롬프트를 자동으로 다듬어 드립니다</p>
+      {error && <div style={{background:"#450a0a",border:"1px solid #ef4444",borderRadius:"8px",padding:"12px",marginBottom:"16px",color:"#fca5a5"}}>{error}</div>}
+      <div style={{background:"#1e293b",borderRadius:"12px",padding:"20px",marginBottom:"16px"}}>
+        <textarea value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder="마이크를 누르거나 직접 입력하세요..." rows={4} style={{width:"100%",background:"#0f172a",border:"1px solid #334155",borderRadius:"8px",padding:"12px",color:"#e2e8f0",fontSize:"15px",resize:"none",boxSizing:"border-box"}} />
+        <div style={{textAlign:"center",margin:"16px 0"}}>
+          <button onClick={isListening ? stopListening : startListening} style={{width:"64px",height:"64px",borderRadius:"50%",background:isListening?"#ef4444":"#7c3aed",border:"none",cursor:"pointer",color:"white",fontSize:"28px"}}>🎤</button>
+          <p style={{color:"#94a3b8",marginTop:"8px",fontSize:"13px"}}>{isListening ? "듣는 중... (탭하여 중지)" : "탭하여 한국어로 말하기"}</p>
         </div>
-        <div className="btn-row">
-          <button
-            type="button"
-            className="boost-btn"
-            onClick={handleBoost}
-            disabled={isBoosting || !transcript.trim()}
-          >
+        <div style={{display:"flex",gap:"8px"}}>
+          <button onClick={handleBoost} disabled={isBoosting || !transcript.trim()} style={{flex:1,padding:"12px",borderRadius:"8px",background:"#7c3aed",border:"none",color:"white",fontSize:"15px",fontWeight:"bold",cursor:"pointer"}}>
             {isBoosting ? "향상 중..." : "프롬프트 향상"}
           </button>
-          <button
-            type="button"
-            className="reset-btn"
-            onClick={() => { setTranscript(""); setBoosted(""); setError(""); }}
-            disabled={isBoosting}
-          >
-            초기화
-          </button>
+          <button onClick={() => { setTranscript(""); setBoosted(""); setError(""); }} style={{padding:"12px 20px",borderRadius:"8px",background:"#334155",border:"none",color:"white",cursor:"pointer"}}>초기화</button>
         </div>
-      </section>
-
-      <section className="card">
-        <div className="result-header">
-          <span className="card-label">향상된 프롬프트</span>
-          <button
-            type="button"
-            className={`copy-btn${copied ? " copied" : ""}`}
-            onClick={copyResult}
-            disabled={!boosted}
-          >
-            {copied ? "복사됨" : "복사"}
-          </button>
+      </div>
+      <div style={{background:"#1e293b",borderRadius:"12px",padding:"20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:"12px"}}>
+          <span style={{color:"#94a3b8",fontSize:"13px"}}>향상된 프롬프트</span>
+          {boosted && <button onClick={() => { navigator.clipboard.writeText(boosted); setCopied(true); setTimeout(() => setCopied(false), 2000); }} style={{background:"transparent",border:"1px solid #334155",color:"#94a3b8",padding:"4px 12px",borderRadius:"6px",cursor:"pointer"}}>{copied ? "복사됨" : "복사"}</button>}
         </div>
-        <div className="result-box">
-          {boosted ? boosted : <span className="result-placeholder">향상된 프롬프트가 여기에 표시됩니다</span>}
+        <div style={{minHeight:"80px",color:boosted?"#e2e8f0":"#475569",fontSize:"14px",lineHeight:"1.6"}}>
+          {boosted || "향상된 프롬프트가 여기에 표시됩니다"}
         </div>
-      </section>
-
-      <p className="footer-note">Web Speech API · Claude API · Chrome 권장</p>
+      </div>
     </div>
   );
 }
