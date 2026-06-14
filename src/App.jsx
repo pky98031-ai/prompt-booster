@@ -1,26 +1,35 @@
 import { useState, useRef } from "react";
 
+<<<<<<< HEAD
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`;
 
+=======
+>>>>>>> e14fbcb (back to claude api)
 async function boostPrompt(apiKey, userText) {
-  const response = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(apiKey)}`, {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
     body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `당신은 AI 프롬프트 전문가입니다. 사용자의 짧은 입력을 받아 더 효과적인 프롬프트로 변환해주세요.
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `당신은 AI 프롬프트 전문가입니다. 사용자의 짧은 입력을 받아 더 효과적인 프롬프트로 변환해주세요.
 
 사용자 입력: "${userText}"
 
 위 입력을 바탕으로 더 구체적이고 효과적인 프롬프트를 한국어로 작성해주세요. 프롬프트만 출력하고 다른 설명은 하지 마세요.`
-        }]
       }]
     })
   });
   const data = await response.json();
   if (data.error) throw new Error(data.error.message);
-  return data.candidates[0].content.parts[0].text;
+  return data.content[0].text;
 }
 
 export default function App() {
@@ -32,7 +41,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const recognitionRef = useRef(null);
 
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
   const startListening = () => {
     if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
@@ -62,8 +71,8 @@ export default function App() {
 
   const handleBoost = async () => {
     if (!transcript.trim()) return;
-    if (!apiKey || apiKey === "your_gemini_api_key_here") {
-      setError(".env 파일에 VITE_GEMINI_API_KEY를 설정해주세요.");
+    if (!apiKey) {
+      setError("API 키가 설정되지 않았습니다.");
       return;
     }
     setIsBoosting(true);
@@ -159,7 +168,7 @@ export default function App() {
         </div>
       </section>
 
-      <p className="footer-note">Web Speech API · Gemini API · Chrome 권장</p>
+      <p className="footer-note">Web Speech API · Claude API · Chrome 권장</p>
     </div>
   );
 }
